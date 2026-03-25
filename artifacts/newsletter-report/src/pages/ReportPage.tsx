@@ -12,7 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
 const PIE_COLORS = ["#2563eb", "#1e40af", "#60a5fa", "#93c5fd", "#bfdbfe", "#1d4ed8", "#3b82f6"];
@@ -233,42 +233,45 @@ export default function ReportPage() {
     reader.readAsDataURL(file);
   };
 
-  const runExport = useCallback(async () => {
+  const captureImage = useCallback(async (): Promise<string | null> => {
     if (!reportRef.current) return null;
     const btns = reportRef.current.querySelectorAll<HTMLElement>(".delete-btn");
-    btns.forEach((b) => (b.style.display = "none"));
-    const canvas = await html2canvas(reportRef.current, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    });
-    btns.forEach((b) => (b.style.display = ""));
-    return canvas;
+    btns.forEach((b) => (b.style.visibility = "hidden"));
+    try {
+      // Run twice — first pass warms up font/image cache
+      await toPng(reportRef.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
+      const dataUrl = await toPng(reportRef.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
+      return dataUrl;
+    } finally {
+      btns.forEach((b) => (b.style.visibility = ""));
+    }
   }, []);
 
   const exportPNG = useCallback(async () => {
-    const canvas = await runExport();
-    if (!canvas) return;
+    const dataUrl = await captureImage();
+    if (!dataUrl) return;
     const link = document.createElement("a");
     link.download = "newsletter-report.png";
-    link.href = canvas.toDataURL("image/png");
+    link.href = dataUrl;
     link.click();
-  }, [runExport]);
+  }, [captureImage]);
 
   const exportPDF = useCallback(async () => {
-    const canvas = await runExport();
-    if (!canvas) return;
-    const imgData = canvas.toDataURL("image/png");
-    const pdfW = canvas.width * 0.264583;
-    const pdfH = canvas.height * 0.264583;
+    const dataUrl = await captureImage();
+    if (!dataUrl) return;
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((res) => (img.onload = res));
+    const pdfW = img.width * 0.264583;
+    const pdfH = img.height * 0.264583;
     const pdf = new jsPDF({
       orientation: pdfW > pdfH ? "landscape" : "portrait",
       unit: "mm",
       format: [pdfW, pdfH],
     });
-    pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+    pdf.addImage(dataUrl, "PNG", 0, 0, pdfW, pdfH);
     pdf.save("newsletter-report.pdf");
-  }, [runExport]);
+  }, [captureImage]);
 
   const pieOpenData = rows.map((r) => ({ name: r.month, value: parseFloat(r.openRate) || 0 }));
   const pieClickData = rows.map((r) => ({ name: r.month, value: parseFloat(r.clickRate) || 0 }));
