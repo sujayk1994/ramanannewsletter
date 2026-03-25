@@ -14,8 +14,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
+import { exportReportAsImage } from "@/utils/export";
 
 const CHART_COLORS = [
   "#ef4444","#f97316","#eab308","#22c55e","#06b6d4",
@@ -256,100 +256,6 @@ interface SidebarField {
 // ---------------------------------------------------------------------------
 // Export color-conversion utility
 // ---------------------------------------------------------------------------
-
-/** Cache to avoid redundant canvas operations for the same oklch string. */
-const _oklchCache = new Map<string, string>();
-
-/**
- * Convert a single oklch(...) value to rgb() / rgba() by painting a 1×1
- * canvas pixel and reading back the RGB bytes.  The browser handles the
- * oklch → sRGB math natively; we just observe the result.
- */
-function oklchToRgb(oklchStr: string): string {
-  if (_oklchCache.has(oklchStr)) return _oklchCache.get(oklchStr)!;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = oklchStr;
-    ctx.fillRect(0, 0, 1, 1);
-    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    const rgb =
-      a === 255
-        ? `rgb(${r},${g},${b})`
-        : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
-    _oklchCache.set(oklchStr, rgb);
-    return rgb;
-  } catch {
-    return oklchStr; // fallback: leave unchanged
-  }
-}
-
-/** Replace every oklch(...) token inside a CSS value string with rgb(). */
-function convertOklchInValue(value: string): string {
-  if (!value.includes("oklch")) return value;
-  return value.replace(/oklch\([^)]+\)/g, oklchToRgb);
-}
-
-/**
- * Color-bearing CSS properties that html-to-image needs to render correctly.
- * Extend this list if new properties cause issues.
- */
-const COLOR_PROPS = [
-  "color",
-  "background-color",
-  "border-top-color",
-  "border-right-color",
-  "border-bottom-color",
-  "border-left-color",
-  "outline-color",
-  "text-decoration-color",
-  "fill",
-  "stroke",
-  "caret-color",
-  "column-rule-color",
-  "accent-color",
-  "box-shadow",
-  "text-shadow",
-] as const;
-
-/**
- * Read computed color styles from `liveEl` (which is already in the document)
- * and write rgb-converted inline styles onto `cloneEl`.
- *
- * Only properties that actually contain oklch() are touched; everything else
- * is left to the clone's own stylesheet inheritance.
- *
- * IMPORTANT: Never called on the original element — only on the clone.
- */
-function applyConvertedColors(liveEl: Element, cloneEl: HTMLElement): void {
-  const cs = getComputedStyle(liveEl);
-  for (const prop of COLOR_PROPS) {
-    const val = cs.getPropertyValue(prop);
-    if (val && val.includes("oklch")) {
-      (cloneEl.style as unknown as Record<string, string>)[prop] =
-        convertOklchInValue(val);
-    }
-  }
-}
-
-/**
- * Recursively walk `liveEl` and `cloneEl` in parallel, converting oklch
- * computed-style values to rgb inline styles on the clone.
- * No mutation of the original DOM ever occurs.
- */
-function walkAndConvertColors(liveEl: Element, cloneEl: Element): void {
-  if (cloneEl instanceof HTMLElement || cloneEl instanceof SVGElement) {
-    applyConvertedColors(liveEl, cloneEl as HTMLElement);
-  }
-  const liveKids = liveEl.children;
-  const cloneKids = cloneEl.children;
-  const len = Math.min(liveKids.length, cloneKids.length);
-  for (let i = 0; i < len; i++) {
-    walkAndConvertColors(liveKids[i], cloneKids[i]);
-  }
-}
 
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);

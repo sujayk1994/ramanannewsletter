@@ -1,0 +1,86 @@
+I am using a Vite + React + Tailwind app on Replit.
+
+I initially tried Puppeteer, but it is NOT feasible here because Chromium cannot be installed due to environment restrictions.
+
+So I want to implement a proper client-side export solution using html-to-image.
+
+--------------------------------------------------
+
+CURRENT PROBLEM:
+
+html-to-image / html2canvas fails because Tailwind uses oklch() colors, which are not supported.
+
+I do NOT want:
+- hacks like replacing colors with black
+- modifying Tailwind config
+- mutating the original DOM
+
+--------------------------------------------------
+
+TASK: Implement a CLEAN export system
+
+--------------------------------------------------
+
+1. Create a function:
+
+   exportReportAsImage(elementId: string)
+
+2. Steps inside function:
+
+   a. Select the target element (report container)
+
+   b. Deep clone the element (do NOT modify original DOM)
+
+   c. Traverse ALL elements in the clone
+
+   d. For each element:
+      - Get computed styles
+      - Detect any color values using "oklch(...)"
+
+   e. Convert oklch → rgb USING CANVAS:
+      - Create a temporary canvas
+      - Set fillStyle = oklch value
+      - Read pixel data using getImageData()
+      - Convert to rgb(r, g, b)
+
+   f. Apply converted rgb values as INLINE styles on the cloned element:
+      - color
+      - backgroundColor
+      - borderColor
+
+   g. Ensure nested elements are handled
+
+3. After processing:
+   - Pass the cloned element to html-to-image (NOT original)
+
+   Example:
+   toPng(clonedElement)
+
+4. Ensure:
+   - No UI flicker
+   - No changes to original UI
+   - Works with Tailwind styles
+   - Handles gradients safely (skip if needed)
+
+5. Remove any old workaround functions like:
+   - withPatchedOklch
+   - CSS overrides
+   - global style hacks
+
+6. Keep code clean and modular:
+   - utils/export.ts
+
+--------------------------------------------------
+
+RETURN:
+
+- Full working exportReportAsImage function
+- Helper function for oklch → rgb conversion
+- Integration example in ReportPage.tsx
+- Remove old broken logic
+
+--------------------------------------------------
+
+GOAL:
+
+A stable export system that works with Tailwind (including oklch) using html-to-image without runtime errors.
