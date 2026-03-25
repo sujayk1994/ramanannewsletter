@@ -247,15 +247,26 @@ function ChartBlock({ title, onTitleChange, chartType, data, chartHeight, outerR
   );
 }
 
+interface SidebarField {
+  id: string;
+  label: string;
+  value: string;
+  multiline: boolean;
+}
+
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);
   const [rows, setRows] = useState<MonthRow[]>(defaultRows);
   const [labels, setLabels] = useState<Labels>(defaultLabels);
   const [extraCols, setExtraCols] = useState<ExtraColumn[]>([]);
+  const [sidebarFields, setSidebarFields] = useState<SidebarField[]>([]);
   const [logo, setLogo] = useState<string | null>(null);
   const [showAddCol, setShowAddCol] = useState(false);
   const [newColName, setNewColName] = useState("New Column");
   const [newColChart, setNewColChart] = useState<ChartType>("bar");
+  const [showAddField, setShowAddField] = useState(false);
+  const [newFieldLabel, setNewFieldLabel] = useState("Label");
+  const [newFieldMultiline, setNewFieldMultiline] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -296,6 +307,22 @@ export default function ReportPage() {
 
   const updateExtraColChartTitle = (colId: string, chartTitle: string) =>
     setExtraCols((p) => p.map((c) => c.id === colId ? { ...c, chartTitle } : c));
+
+  const addSidebarField = () => {
+    const id = Date.now().toString();
+    setSidebarFields((p) => [...p, { id, label: newFieldLabel, value: "", multiline: newFieldMultiline }]);
+    setShowAddField(false);
+    setNewFieldLabel("Label");
+    setNewFieldMultiline(false);
+  };
+
+  const removeSidebarField = (id: string) => setSidebarFields((p) => p.filter((f) => f.id !== id));
+
+  const updateSidebarFieldLabel = (id: string, label: string) =>
+    setSidebarFields((p) => p.map((f) => f.id === id ? { ...f, label } : f));
+
+  const updateSidebarFieldValue = (id: string, value: string) =>
+    setSidebarFields((p) => p.map((f) => f.id === id ? { ...f, value } : f));
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -412,24 +439,41 @@ export default function ReportPage() {
             <label className="block text-xs text-gray-500 mb-2">Chart Type</label>
             <div className="grid grid-cols-2 gap-2 mb-5">
               {(["bar", "pie", "line", "none"] as ChartType[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setNewColChart(t)}
+                <button key={t} onClick={() => setNewColChart(t)}
                   className={`py-1.5 rounded border text-xs font-medium capitalize transition ${
                     newColChart === t ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-                  }`}
-                >
+                  }`}>
                   {t === "none" ? "No Chart" : `${t.charAt(0).toUpperCase() + t.slice(1)} Chart`}
                 </button>
               ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={addColumn} className="flex-1 bg-blue-600 text-white text-xs font-medium py-1.5 rounded hover:bg-blue-700 transition">
-                Add Column
-              </button>
-              <button onClick={() => setShowAddCol(false)} className="flex-1 bg-gray-100 text-gray-600 text-xs font-medium py-1.5 rounded hover:bg-gray-200 transition">
-                Cancel
-              </button>
+              <button onClick={addColumn} className="flex-1 bg-blue-600 text-white text-xs font-medium py-1.5 rounded hover:bg-blue-700 transition">Add Column</button>
+              <button onClick={() => setShowAddCol(false)} className="flex-1 bg-gray-100 text-gray-600 text-xs font-medium py-1.5 rounded hover:bg-gray-200 transition">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Sidebar Field Modal */}
+      {showAddField && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowAddField(false)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-72" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-gray-800 mb-4">Add Sidebar Field</h3>
+            <label className="block text-xs text-gray-500 mb-1">Field Label</label>
+            <input
+              type="text"
+              value={newFieldLabel}
+              onChange={(e) => setNewFieldLabel(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm mb-4 focus:outline-none focus:border-blue-500"
+            />
+            <label className="flex items-center gap-2 text-xs text-gray-600 mb-5 cursor-pointer">
+              <input type="checkbox" checked={newFieldMultiline} onChange={(e) => setNewFieldMultiline(e.target.checked)} className="rounded" />
+              Multi-line value (for longer text)
+            </label>
+            <div className="flex gap-2">
+              <button onClick={addSidebarField} className="flex-1 bg-blue-600 text-white text-xs font-medium py-1.5 rounded hover:bg-blue-700 transition">Add Field</button>
+              <button onClick={() => setShowAddField(false)} className="flex-1 bg-gray-100 text-gray-600 text-xs font-medium py-1.5 rounded hover:bg-gray-200 transition">Cancel</button>
             </div>
           </div>
         </div>
@@ -450,6 +494,9 @@ export default function ReportPage() {
           <button onClick={() => setShowAddCol(true)} className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition">
             + Add Column
           </button>
+          <button onClick={() => setShowAddField(true)} className="px-3 py-1.5 bg-teal-600 text-white text-xs font-medium rounded hover:bg-teal-700 transition">
+            + Add Sidebar Field
+          </button>
           <button onClick={() => logoInputRef.current?.click()} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-medium rounded hover:bg-slate-600 transition">
             Upload Report Logo
           </button>
@@ -465,8 +512,16 @@ export default function ReportPage() {
         </div>
       </div>
 
-      {/* Report */}
-      <div ref={reportRef} className="max-w-[1200px] mx-auto bg-white shadow-lg" style={{ fontFamily: "'Calibri','Arial',sans-serif" }}>
+      {/* Report — expands horizontally as columns are added */}
+      <div
+        ref={reportRef}
+        className="bg-white shadow-lg mx-auto"
+        style={{
+          fontFamily: "'Calibri','Arial',sans-serif",
+          minWidth: `${1200 + extraCols.length * 190}px`,
+          width: `${1200 + extraCols.length * 190}px`,
+        }}
+      >
 
         {/* Title */}
         <div className="bg-[#1e3a5f] text-white text-center py-3 px-4">
@@ -477,13 +532,59 @@ export default function ReportPage() {
         {/* Info + Table */}
         <div className="flex">
           {/* Sidebar */}
-          <div className="bg-[#1e3a5f] text-white p-5 min-w-[300px] w-[300px] flex-shrink-0">
-            <InfoRow label="Client"    value={info.client}    onChange={(v) => updateInfo("client", v)} />
-            <InfoRow label="Campaign"  value={info.campaign}  onChange={(v) => updateInfo("campaign", v)} />
-            <InfoRow label="Period"    value={info.period}    onChange={(v) => updateInfo("period", v)}   multiline />
-            <InfoRow label="Magazine"  value={info.magazine}  onChange={(v) => updateInfo("magazine", v)} />
-            <InfoRow label="Edition"   value={info.edition}   onChange={(v) => updateInfo("edition", v)}  multiline />
-            <InfoRow label="Link"      value={info.link}      onChange={(v) => updateInfo("link", v)}     multiline />
+          <div className="bg-[#1e3a5f] text-white p-5 min-w-[300px] w-[300px] flex-shrink-0 flex flex-col">
+            {/* Fixed fields */}
+            <InfoRow label="Client"   value={info.client}   onChange={(v) => updateInfo("client", v)} />
+            <InfoRow label="Campaign" value={info.campaign} onChange={(v) => updateInfo("campaign", v)} />
+            <InfoRow label="Period"   value={info.period}   onChange={(v) => updateInfo("period", v)}   multiline />
+            <InfoRow label="Magazine" value={info.magazine} onChange={(v) => updateInfo("magazine", v)} />
+            <InfoRow label="Edition"  value={info.edition}  onChange={(v) => updateInfo("edition", v)}  multiline />
+            <InfoRow label="Link"     value={info.link}     onChange={(v) => updateInfo("link", v)}     multiline />
+
+            {/* Dynamic extra fields */}
+            {sidebarFields.map((field) => (
+              <div key={field.id} className="mb-3 relative group">
+                {/* Editable label */}
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={field.label}
+                    onChange={(e) => updateSidebarFieldLabel(field.id, e.target.value)}
+                    className="bg-transparent text-blue-200 text-xs font-semibold uppercase tracking-wider border-none focus:outline-none focus:underline w-auto min-w-0 flex-shrink"
+                    style={{ width: `${Math.max(field.label.length, 4) + 1}ch` }}
+                  />
+                  <span className="text-blue-300 text-xs flex-shrink-0"> : </span>
+                  <button
+                    onClick={() => removeSidebarField(field.id)}
+                    className="delete-btn ml-auto text-red-300 hover:text-red-100 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove field"
+                  >×</button>
+                </div>
+                {/* Value */}
+                {field.multiline ? (
+                  <AutoTextarea
+                    value={field.value}
+                    onChange={(v) => updateSidebarFieldValue(field.id, v)}
+                    className="bg-transparent border-b border-dashed border-blue-400 focus:outline-none focus:border-white resize-none w-full leading-snug text-white text-sm"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={field.value}
+                    onChange={(e) => updateSidebarFieldValue(field.id, e.target.value)}
+                    className="bg-transparent border-b border-dashed border-blue-400 focus:outline-none focus:border-white w-full text-white text-sm"
+                  />
+                )}
+              </div>
+            ))}
+
+            {/* Add Field button */}
+            <button
+              onClick={() => setShowAddField(true)}
+              className="delete-btn mt-2 text-blue-300 hover:text-white text-xs border border-dashed border-blue-500 hover:border-white rounded px-2 py-1 transition self-start"
+            >
+              + Add Field
+            </button>
           </div>
 
           {/* Table area */}
