@@ -254,6 +254,19 @@ interface SidebarField {
   multiline: boolean;
 }
 
+function resolveComputedColors(el: HTMLElement) {
+  const cs = window.getComputedStyle(el);
+  el.style.backgroundColor = cs.backgroundColor;
+  el.style.color = cs.color;
+  el.style.borderTopColor = cs.borderTopColor;
+  el.style.borderRightColor = cs.borderRightColor;
+  el.style.borderBottomColor = cs.borderBottomColor;
+  el.style.borderLeftColor = cs.borderLeftColor;
+  for (let i = 0; i < el.children.length; i++) {
+    resolveComputedColors(el.children[i] as HTMLElement);
+  }
+}
+
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);
   const [rows, setRows] = useState<MonthRow[]>(defaultRows);
@@ -269,6 +282,20 @@ export default function ReportPage() {
   const [newFieldMultiline, setNewFieldMultiline] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [tableContainerHeight, setTableContainerHeight] = useState(320);
+
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setTableContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const updateInfo = (key: keyof ReportInfo, value: string) => setInfo((p) => ({ ...p, [key]: value }));
   const updateLabel = (key: keyof Labels, value: string) => setLabels((p) => ({ ...p, [key]: value }));
@@ -348,7 +375,7 @@ export default function ReportPage() {
     clone.style.overflow = "visible";
     clone.style.zIndex = "-1";
 
-    // Replace <input> with plain <span> — copy className only (not computed styles, which have oklch colors)
+    // Replace <input> with plain <span>
     const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>("input[type=text]"));
     clone.querySelectorAll<HTMLInputElement>("input[type=text]").forEach((input, i) => {
       const span = document.createElement("span");
@@ -382,6 +409,9 @@ export default function ReportPage() {
 
     document.body.appendChild(clone);
     try {
+      // Resolve oklch computed colors to plain rgb so html-to-image can render them
+      resolveComputedColors(clone);
+
       const opts = { pixelRatio: 2, backgroundColor: "#ffffff", width, height, skipFonts: true };
       await toPng(clone, opts); // warm-up
       return await toPng(clone, opts);
@@ -414,6 +444,13 @@ export default function ReportPage() {
 
   const chartHeight = Math.max(300, 260 + rows.length * 12);
   const outerRadius = Math.min(95, 72 + rows.length * 3);
+
+  // Dynamic row height: fills available space when few months, squeezes to MIN when many
+  const TABLE_HEADER_HEIGHT = 42;
+  const TABLE_TOTAL_HEIGHT = 42;
+  const MIN_ROW_HEIGHT = 36;
+  const availableForRows = tableContainerHeight - TABLE_HEADER_HEIGHT - TABLE_TOTAL_HEIGHT;
+  const rowHeight = Math.max(MIN_ROW_HEIGHT, Math.floor(availableForRows / rows.length));
 
   const pieOpenData  = rows.map((r) => ({ name: r.month, value: parseFloat(r.openRate) || 0 }));
   const pieClickData = rows.map((r) => ({ name: r.month, value: parseFloat(r.clickRate) || 0 }));
@@ -603,7 +640,7 @@ export default function ReportPage() {
             </div>
 
             {/* Table — fills remaining height; rows grow when months are few */}
-            <div className="overflow-x-auto flex-1" style={{ height: 0 }}>
+            <div ref={tableContainerRef} className="overflow-x-auto flex-1" style={{ height: 0 }}>
               <table className="w-full text-sm border-collapse" style={{ height: "100%" }}>
                 <thead>
                   <tr className="bg-[#2563eb] text-white">
@@ -630,39 +667,29 @@ export default function ReportPage() {
                 </thead>
                 <tbody>
                   {rows.map((row, i) => (
-                    <tr key={row.id} className={i % 2 === 0 ? "bg-[#eff6ff]" : "bg-white"}>
-                      <td className="py-2 px-3 border border-blue-100">
+                    <tr key={row.id} className={i % 2 === 0 ? "bg-[#eff6ff]" : "bg-white"} style={{ height: rowHeight + "px" }}>
+                      <td className="py-2 px-3 border border-blue-100 align-middle">
                         <EditableCell value={row.month} onChange={(v) => updateRow(row.id, "month", v)} className="font-medium text-[#1e3a5f]" />
                       </td>
-                      <td className="py-2 px-3 border border-blue-100">
+                      <td className="py-2 px-3 border border-blue-100 align-middle">
                         <EditableCell value={row.optinSubscribers} onChange={(v) => updateRow(row.id, "optinSubscribers", v)} align="right" />
                       </td>
-                      <td className="py-2 px-3 border border-blue-100">
+                      <td className="py-2 px-3 border border-blue-100 align-middle">
                         <EditableCell value={row.openRate} onChange={(v) => updateRow(row.id, "openRate", v)} align="right" />
                       </td>
-                      <td className="py-2 px-3 border border-blue-100">
+                      <td className="py-2 px-3 border border-blue-100 align-middle">
                         <EditableCell value={row.clickRate} onChange={(v) => updateRow(row.id, "clickRate", v)} align="right" />
                       </td>
                       {extraCols.map((col) => (
-                        <td key={col.id} className="py-2 px-3 border border-blue-100">
+                        <td key={col.id} className="py-2 px-3 border border-blue-100 align-middle">
                           <EditableCell value={row.extras[col.id] ?? "0"} onChange={(v) => updateExtra(row.id, col.id, v)} align="right" />
                         </td>
                       ))}
-                      <td className="py-2 px-3 border border-blue-100 text-center delete-btn">
+                      <td className="py-2 px-3 border border-blue-100 text-center align-middle delete-btn">
                         <button onClick={() => removeRow(row.id)} className="text-red-500 hover:text-red-700 font-bold text-base leading-none" title="Remove month">×</button>
                       </td>
                     </tr>
                   ))}
-
-                  {/* Spacer row — absorbs leftover height so no whitespace gap */}
-                  <tr style={{ height: "100%" }}>
-                    <td className="border-l border-r border-blue-100" />
-                    <td className="border-r border-blue-100" />
-                    <td className="border-r border-blue-100" />
-                    <td className="border-r border-blue-100" />
-                    {extraCols.map((col) => <td key={col.id} className="border-r border-blue-100" />)}
-                    <td className="delete-btn" />
-                  </tr>
 
                   {/* Total row */}
                   <tr className="bg-[#1e3a5f] text-white font-bold">
