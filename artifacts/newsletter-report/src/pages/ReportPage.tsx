@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import appLogo from "@assets/ramanan_1774446414560.png";
 import {
   PieChart,
@@ -182,6 +182,34 @@ function EditableCell({
   );
 }
 
+function AutoTextarea({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = "auto";
+      ref.current.style.height = ref.current.scrollHeight + "px";
+    }
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className}
+      rows={1}
+      style={{ overflow: "hidden" }}
+    />
+  );
+}
+
 function InfoRow({
   label,
   value,
@@ -198,11 +226,10 @@ function InfoRow({
       <span className="text-blue-200 text-xs font-semibold uppercase tracking-wider">{label}</span>
       <span className="text-blue-300 text-xs"> : </span>
       {multiline ? (
-        <textarea
+        <AutoTextarea
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={onChange}
           className="bg-transparent border-b border-dashed border-blue-400 focus:outline-none focus:border-white resize-none w-full leading-snug text-white text-sm"
-          rows={2}
         />
       ) : (
         <input
@@ -259,45 +286,76 @@ export default function ReportPage() {
   const captureImage = useCallback(async (): Promise<string | null> => {
     if (!reportRef.current) return null;
     const el = reportRef.current;
+    const width = el.scrollWidth;
+    const height = el.scrollHeight;
 
-    // Hide delete buttons
-    const btns = el.querySelectorAll<HTMLElement>(".delete-btn");
-    btns.forEach((b) => (b.style.visibility = "hidden"));
+    // Deep-clone the rendered DOM so we don't mutate the live UI
+    const clone = el.cloneNode(true) as HTMLElement;
 
-    // Temporarily lift any width/overflow constraints so we capture the full layout
-    const prevStyle = {
-      maxWidth: el.style.maxWidth,
-      width: el.style.width,
-      overflow: el.style.overflow,
-      position: el.style.position,
-    };
-    el.style.maxWidth = "none";
-    el.style.width = "auto";
-    el.style.overflow = "visible";
-    el.style.position = "relative";
+    // Position off-screen at the exact source size
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0px";
+    clone.style.width = width + "px";
+    clone.style.maxWidth = "none";
+    clone.style.overflow = "visible";
+    clone.style.zIndex = "-1";
 
-    // Also make inner tables overflow visible
-    const tables = el.querySelectorAll<HTMLElement>(".overflow-x-auto");
-    const prevTableOverflow = Array.from(tables).map((t) => t.style.overflow);
-    tables.forEach((t) => (t.style.overflow = "visible"));
+    // Replace every <input> with a plain <span> showing its value
+    clone.querySelectorAll<HTMLInputElement>("input").forEach((input) => {
+      const span = document.createElement("span");
+      span.textContent = input.value;
+      // Copy key visual styles from the computed style
+      const cs = window.getComputedStyle(input);
+      span.style.fontSize = cs.fontSize;
+      span.style.fontWeight = cs.fontWeight;
+      span.style.color = cs.color;
+      span.style.fontFamily = cs.fontFamily;
+      span.style.letterSpacing = cs.letterSpacing;
+      span.style.textAlign = cs.textAlign;
+      span.style.display = "block";
+      span.style.width = "100%";
+      span.style.border = "none";
+      input.replaceWith(span);
+    });
+
+    // Replace every <textarea> with a <div> showing its value
+    clone.querySelectorAll<HTMLTextAreaElement>("textarea").forEach((ta) => {
+      const div = document.createElement("div");
+      div.textContent = ta.value;
+      const cs = window.getComputedStyle(ta);
+      div.style.fontSize = cs.fontSize;
+      div.style.fontWeight = cs.fontWeight;
+      div.style.color = cs.color;
+      div.style.fontFamily = cs.fontFamily;
+      div.style.lineHeight = cs.lineHeight;
+      div.style.border = "none";
+      div.style.width = "100%";
+      ta.replaceWith(div);
+    });
+
+    // Remove delete buttons entirely
+    clone.querySelectorAll<HTMLElement>(".delete-btn").forEach((b) => b.remove());
+
+    // Make all SVGs overflow visible so pie labels aren't clipped
+    clone.querySelectorAll<SVGElement>("svg").forEach((s) => {
+      s.style.overflow = "visible";
+    });
+
+    // Make table wrappers non-scrolling
+    clone.querySelectorAll<HTMLElement>(".overflow-x-auto").forEach((t) => {
+      t.style.overflow = "visible";
+    });
+
+    document.body.appendChild(clone);
 
     try {
-      const width = el.scrollWidth;
-      const height = el.scrollHeight;
-
-      // First pass warms up font/image cache
-      await toPng(el, { pixelRatio: 2, backgroundColor: "#ffffff", width, height });
-      // Second pass is the real capture
-      const dataUrl = await toPng(el, { pixelRatio: 2, backgroundColor: "#ffffff", width, height });
+      // Warm-up pass then real capture
+      await toPng(clone, { pixelRatio: 2, backgroundColor: "#ffffff", width, height });
+      const dataUrl = await toPng(clone, { pixelRatio: 2, backgroundColor: "#ffffff", width, height });
       return dataUrl;
     } finally {
-      // Restore all styles
-      el.style.maxWidth = prevStyle.maxWidth;
-      el.style.width = prevStyle.width;
-      el.style.overflow = prevStyle.overflow;
-      el.style.position = prevStyle.position;
-      tables.forEach((t, i) => (t.style.overflow = prevTableOverflow[i]));
-      btns.forEach((b) => (b.style.visibility = ""));
+      document.body.removeChild(clone);
     }
   }, []);
 
