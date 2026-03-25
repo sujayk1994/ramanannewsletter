@@ -392,37 +392,61 @@ export default function ReportPage() {
     const width = el.scrollWidth;
     const height = el.scrollHeight;
 
-    // Temporarily hide UI-only elements
-    const deleteBtns = Array.from(el.querySelectorAll<HTMLElement>(".delete-btn"));
-    const dashedInputs = Array.from(el.querySelectorAll<HTMLElement>("input[type=text], textarea"));
-    deleteBtns.forEach((b) => { b.style.visibility = "hidden"; });
-    dashedInputs.forEach((inp) => {
-      (inp as HTMLElement).style.borderBottomStyle = "none";
-      (inp as HTMLElement).style.outline = "none";
+    // Place a full-width clone off-screen so layout isn't constrained by the viewport
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0px";
+    clone.style.width = width + "px";
+    clone.style.maxWidth = "none";
+    clone.style.overflow = "visible";
+    clone.style.zIndex = "-1";
+
+    // Replace <input> with a plain <span> carrying the live value
+    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>("input[type=text]"));
+    clone.querySelectorAll<HTMLInputElement>("input[type=text]").forEach((inp, i) => {
+      const span = document.createElement("span");
+      span.textContent = liveInputs[i]?.value ?? inp.value;
+      span.className = inp.className;
+      span.style.border = "none";
+      span.style.outline = "none";
+      span.style.display = "inline-block";
+      inp.replaceWith(span);
     });
 
+    // Replace <textarea> with a plain <div>
+    const liveTAs = Array.from(el.querySelectorAll<HTMLTextAreaElement>("textarea"));
+    clone.querySelectorAll<HTMLTextAreaElement>("textarea").forEach((ta, i) => {
+      const div = document.createElement("div");
+      div.textContent = liveTAs[i]?.value ?? ta.value;
+      div.className = ta.className;
+      div.style.border = "none";
+      div.style.outline = "none";
+      ta.replaceWith(div);
+    });
+
+    // Remove delete/action buttons
+    clone.querySelectorAll<HTMLElement>(".delete-btn").forEach((b) => b.remove());
+
+    // SVG pie labels overflow their bounding box
+    clone.querySelectorAll<SVGElement>("svg").forEach((s) => (s.style.overflow = "visible"));
+
+    // Table scroll wrappers must not clip
+    clone.querySelectorAll<HTMLElement>(".overflow-x-auto").forEach((t) => (t.style.overflow = "visible"));
+
+    document.body.appendChild(clone);
     try {
-      // Patch oklch→rgb in stylesheets so html-to-image can embed them correctly
       const dataUrl = await withPatchedOklch(() =>
-        toPng(el, {
+        toPng(clone, {
           pixelRatio: 2,
           backgroundColor: "#ffffff",
           width,
           height,
-          style: { overflow: "visible" },
-          filter: (node) => {
-            if (node instanceof HTMLElement && node.classList?.contains("delete-btn")) return false;
-            return true;
-          },
         })
       );
       return dataUrl;
     } finally {
-      deleteBtns.forEach((b) => { b.style.visibility = ""; });
-      dashedInputs.forEach((inp) => {
-        (inp as HTMLElement).style.borderBottomStyle = "";
-        (inp as HTMLElement).style.outline = "";
-      });
+      document.body.removeChild(clone);
     }
   }, []);
 
