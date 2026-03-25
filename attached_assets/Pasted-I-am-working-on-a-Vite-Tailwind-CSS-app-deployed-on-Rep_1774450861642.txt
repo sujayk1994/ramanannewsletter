@@ -1,0 +1,84 @@
+I am working on a Vite + Tailwind CSS app deployed on Replit.
+
+I have a report generator feature where users can download the report as PDF or PNG.
+
+Currently I am using html2canvas / html-to-image, but I am getting this error:
+
+"Attempting to parse an unsupported color function 'oklch'"
+
+Root cause:
+Tailwind CSS (v3.3+ / v4) uses oklch() color functions, which html2canvas does NOT support.
+
+I do NOT want a hacky fix like:
+- replacing colors with black
+- manually editing styles
+- patching CSS at runtime
+
+I want a proper production-grade solution.
+
+--------------------------------------------------
+
+TASK: Replace the export system completely
+
+--------------------------------------------------
+
+1. Remove html2canvas / html-to-image usage from the project.
+
+2. Implement server-side export using Puppeteer.
+
+3. Create backend functions:
+   - generatePDF(html)
+   - generatePNG(html)
+
+4. Create API routes:
+   POST /export/pdf
+   POST /export/png
+
+5. On frontend:
+   - Capture the report container (by ID)
+   - Send its HTML to backend
+   - Download returned file (PDF/PNG)
+
+6. IMPORTANT:
+   Wrap the HTML properly so Tailwind styles work in Puppeteer:
+
+   Use:
+   <html>
+     <head>
+       <script src="https://cdn.tailwindcss.com"></script>
+     </head>
+     <body>
+       <!-- report html -->
+     </body>
+   </html>
+
+7. Ensure:
+   - printBackground: true (so colors render)
+   - fullPage screenshot for PNG
+   - no UI flicker
+   - clean async/await handling
+
+8. Use this Puppeteer config (Replit-safe):
+   puppeteer.launch({
+     args: ["--no-sandbox", "--disable-setuid-sandbox"]
+   })
+
+9. Keep code clean and modular:
+   - server/export.js
+   - server routes
+   - frontend download function
+
+10. Do NOT modify Tailwind config or UI styles.
+
+--------------------------------------------------
+
+RETURN:
+- Full backend code
+- Full frontend download function
+- File structure changes
+- Exact integration steps
+
+--------------------------------------------------
+
+Goal:
+A stable export system that works with Tailwind (including oklch) and generates pixel-perfect PDF/PNG without errors.

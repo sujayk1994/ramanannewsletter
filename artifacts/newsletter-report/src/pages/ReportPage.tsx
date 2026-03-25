@@ -253,10 +253,20 @@ interface SidebarField {
   value: string;
   multiline: boolean;
 }
-const oklchCache = new Map<string, string>();
+// ---------------------------------------------------------------------------
+// Export color-conversion utility
+// ---------------------------------------------------------------------------
 
+/** Cache to avoid redundant canvas operations for the same oklch string. */
+const _oklchCache = new Map<string, string>();
+
+/**
+ * Convert a single oklch(...) value to rgb() / rgba() by painting a 1×1
+ * canvas pixel and reading back the RGB bytes.  The browser handles the
+ * oklch → sRGB math natively; we just observe the result.
+ */
 function oklchToRgb(oklchStr: string): string {
-  if (oklchCache.has(oklchStr)) return oklchCache.get(oklchStr)!;
+  if (_oklchCache.has(oklchStr)) return _oklchCache.get(oklchStr)!;
   try {
     const canvas = document.createElement("canvas");
     canvas.width = 1;
@@ -265,32 +275,79 @@ function oklchToRgb(oklchStr: string): string {
     ctx.fillStyle = oklchStr;
     ctx.fillRect(0, 0, 1, 1);
     const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    const rgb = a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
-    oklchCache.set(oklchStr, rgb);
+    const rgb =
+      a === 255
+        ? `rgb(${r},${g},${b})`
+        : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
+    _oklchCache.set(oklchStr, rgb);
     return rgb;
   } catch {
-    return oklchStr;
+    return oklchStr; // fallback: leave unchanged
   }
 }
 
-async function withPatchedOklch<T>(fn: () => Promise<T>): Promise<T> {
-  const styleEls = Array.from(document.querySelectorAll<HTMLStyleElement>("style"));
-  const originals: Array<{ el: HTMLStyleElement; text: string }> = [];
+/** Replace every oklch(...) token inside a CSS value string with rgb(). */
+function convertOklchInValue(value: string): string {
+  if (!value.includes("oklch")) return value;
+  return value.replace(/oklch\([^)]+\)/g, oklchToRgb);
+}
 
-  for (const style of styleEls) {
-    const original = style.textContent || "";
-    if (!original.includes("oklch")) continue;
-    originals.push({ el: style, text: original });
-    const patched = original.replace(/oklch\([^)]+\)/g, oklchToRgb);
-    style.textContent = patched;
-  }
+/**
+ * Color-bearing CSS properties that html-to-image needs to render correctly.
+ * Extend this list if new properties cause issues.
+ */
+const COLOR_PROPS = [
+  "color",
+  "background-color",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "outline-color",
+  "text-decoration-color",
+  "fill",
+  "stroke",
+  "caret-color",
+  "column-rule-color",
+  "accent-color",
+  "box-shadow",
+  "text-shadow",
+] as const;
 
-  try {
-    return await fn();
-  } finally {
-    for (const { el, text } of originals) {
-      el.textContent = text;
+/**
+ * Read computed color styles from `liveEl` (which is already in the document)
+ * and write rgb-converted inline styles onto `cloneEl`.
+ *
+ * Only properties that actually contain oklch() are touched; everything else
+ * is left to the clone's own stylesheet inheritance.
+ *
+ * IMPORTANT: Never called on the original element — only on the clone.
+ */
+function applyConvertedColors(liveEl: Element, cloneEl: HTMLElement): void {
+  const cs = getComputedStyle(liveEl);
+  for (const prop of COLOR_PROPS) {
+    const val = cs.getPropertyValue(prop);
+    if (val && val.includes("oklch")) {
+      (cloneEl.style as unknown as Record<string, string>)[prop] =
+        convertOklchInValue(val);
     }
+  }
+}
+
+/**
+ * Recursively walk `liveEl` and `cloneEl` in parallel, converting oklch
+ * computed-style values to rgb inline styles on the clone.
+ * No mutation of the original DOM ever occurs.
+ */
+function walkAndConvertColors(liveEl: Element, cloneEl: Element): void {
+  if (cloneEl instanceof HTMLElement || cloneEl instanceof SVGElement) {
+    applyConvertedColors(liveEl, cloneEl as HTMLElement);
+  }
+  const liveKids = liveEl.children;
+  const cloneKids = cloneEl.children;
+  const len = Math.min(liveKids.length, cloneKids.length);
+  for (let i = 0; i < len; i++) {
+    walkAndConvertColors(liveKids[i], cloneKids[i]);
   }
 }
 
@@ -434,18 +491,41 @@ export default function ReportPage() {
     // Table scroll wrappers must not clip
     clone.querySelectorAll<HTMLElement>(".overflow-x-auto").forEach((t) => (t.style.overflow = "visible"));
 
+    // Walk the live tree + clone in parallel: read computed colors from the
+    // live element, convert oklch() → rgb() via canvas pixel sampling, and
+    // apply the rgb values as inline styles on the clone.
+    // This runs BEFORE the clone is in the DOM, so it never causes a flicker.
+    walkAndConvertColors(el, clone);
+
     document.body.appendChild(clone);
+
+    // html-to-image also embeds the raw <style> tags in the SVG foreignObject.
+    // Patch oklch tokens in those tags for the duration of the toPng call,
+    // then restore them immediately after so the live UI is never mutated.
+    const styleEls = Array.from(
+      document.querySelectorAll<HTMLStyleElement>("style")
+    );
+    const styleBackups: Array<{ el: HTMLStyleElement; original: string }> = [];
+    for (const styleEl of styleEls) {
+      const original = styleEl.textContent ?? "";
+      if (!original.includes("oklch")) continue;
+      styleBackups.push({ el: styleEl, original });
+      styleEl.textContent = original.replace(/oklch\([^)]+\)/g, oklchToRgb);
+    }
+
     try {
-      const dataUrl = await withPatchedOklch(() =>
-        toPng(clone, {
-          pixelRatio: 2,
-          backgroundColor: "#ffffff",
-          width,
-          height,
-        })
-      );
+      const dataUrl = await toPng(clone, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        width,
+        height,
+      });
       return dataUrl;
     } finally {
+      // Restore stylesheets and remove clone — always runs, even on error
+      for (const { el, original } of styleBackups) {
+        el.textContent = original;
+      }
       document.body.removeChild(clone);
     }
   }, []);
