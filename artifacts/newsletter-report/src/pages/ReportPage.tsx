@@ -14,7 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { toPng } from "html-to-image";
+import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 const CHART_COLORS = [
@@ -254,18 +254,6 @@ interface SidebarField {
   multiline: boolean;
 }
 
-function resolveComputedColors(el: HTMLElement) {
-  const cs = window.getComputedStyle(el);
-  el.style.backgroundColor = cs.backgroundColor;
-  el.style.color = cs.color;
-  el.style.borderTopColor = cs.borderTopColor;
-  el.style.borderRightColor = cs.borderRightColor;
-  el.style.borderBottomColor = cs.borderBottomColor;
-  el.style.borderLeftColor = cs.borderLeftColor;
-  for (let i = 0; i < el.children.length; i++) {
-    resolveComputedColors(el.children[i] as HTMLElement);
-  }
-}
 
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);
@@ -362,61 +350,39 @@ export default function ReportPage() {
   const captureImage = useCallback(async (): Promise<string | null> => {
     if (!reportRef.current) return null;
     const el = reportRef.current;
-    const width = el.scrollWidth;
-    const height = el.scrollHeight;
 
-    // Clone off-screen
-    const clone = el.cloneNode(true) as HTMLElement;
-    clone.style.position = "fixed";
-    clone.style.top = "-99999px";
-    clone.style.left = "0px";
-    clone.style.width = width + "px";
-    clone.style.maxWidth = "none";
-    clone.style.overflow = "visible";
-    clone.style.zIndex = "-1";
+    // Temporarily hide UI-only elements that shouldn't appear in the export
+    const deleteBtns = Array.from(el.querySelectorAll<HTMLElement>(".delete-btn"));
+    const dashedInputs = Array.from(el.querySelectorAll<HTMLInputElement>("input[type=text], textarea"));
 
-    // Replace <input> with plain <span>
-    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>("input[type=text]"));
-    clone.querySelectorAll<HTMLInputElement>("input[type=text]").forEach((input, i) => {
-      const span = document.createElement("span");
-      span.textContent = liveInputs[i]?.value ?? input.value;
-      span.className = input.className;
-      span.style.border = "none";
-      span.style.outline = "none";
-      span.style.display = "inline-block";
-      input.replaceWith(span);
+    deleteBtns.forEach((b) => { b.style.visibility = "hidden"; });
+    // Remove dashed edit borders from inputs for a clean export
+    dashedInputs.forEach((inp) => {
+      inp.style.borderBottomStyle = "none";
+      inp.style.outline = "none";
     });
 
-    // Replace <textarea> with plain <div>
-    const liveTAs = Array.from(el.querySelectorAll<HTMLTextAreaElement>("textarea"));
-    clone.querySelectorAll<HTMLTextAreaElement>("textarea").forEach((ta, i) => {
-      const div = document.createElement("div");
-      div.textContent = liveTAs[i]?.value ?? ta.value;
-      div.className = ta.className;
-      div.style.border = "none";
-      div.style.outline = "none";
-      ta.replaceWith(div);
-    });
-
-    // Remove delete buttons
-    clone.querySelectorAll<HTMLElement>(".delete-btn").forEach((b) => b.remove());
-
-    // Make SVGs overflow visible for pie labels
-    clone.querySelectorAll<SVGElement>("svg").forEach((s) => (s.style.overflow = "visible"));
-
-    // Make table wrappers fully expand
-    clone.querySelectorAll<HTMLElement>(".overflow-x-auto").forEach((t) => (t.style.overflow = "visible"));
-
-    document.body.appendChild(clone);
     try {
-      // Resolve oklch computed colors to plain rgb so html-to-image can render them
-      resolveComputedColors(clone);
-
-      const opts = { pixelRatio: 2, backgroundColor: "#ffffff", width, height, skipFonts: true };
-      await toPng(clone, opts); // warm-up
-      return await toPng(clone, opts);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
+      });
+      return canvas.toDataURL("image/png");
     } finally {
-      document.body.removeChild(clone);
+      // Restore everything
+      deleteBtns.forEach((b) => { b.style.visibility = ""; });
+      dashedInputs.forEach((inp) => {
+        inp.style.borderBottomStyle = "";
+        inp.style.outline = "";
+      });
     }
   }, []);
 
