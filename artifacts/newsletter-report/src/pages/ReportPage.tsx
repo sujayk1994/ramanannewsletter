@@ -258,14 +258,45 @@ export default function ReportPage() {
 
   const captureImage = useCallback(async (): Promise<string | null> => {
     if (!reportRef.current) return null;
-    const btns = reportRef.current.querySelectorAll<HTMLElement>(".delete-btn");
+    const el = reportRef.current;
+
+    // Hide delete buttons
+    const btns = el.querySelectorAll<HTMLElement>(".delete-btn");
     btns.forEach((b) => (b.style.visibility = "hidden"));
+
+    // Temporarily lift any width/overflow constraints so we capture the full layout
+    const prevStyle = {
+      maxWidth: el.style.maxWidth,
+      width: el.style.width,
+      overflow: el.style.overflow,
+      position: el.style.position,
+    };
+    el.style.maxWidth = "none";
+    el.style.width = "auto";
+    el.style.overflow = "visible";
+    el.style.position = "relative";
+
+    // Also make inner tables overflow visible
+    const tables = el.querySelectorAll<HTMLElement>(".overflow-x-auto");
+    const prevTableOverflow = Array.from(tables).map((t) => t.style.overflow);
+    tables.forEach((t) => (t.style.overflow = "visible"));
+
     try {
-      // Run twice — first pass warms up font/image cache
-      await toPng(reportRef.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
-      const dataUrl = await toPng(reportRef.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
+      const width = el.scrollWidth;
+      const height = el.scrollHeight;
+
+      // First pass warms up font/image cache
+      await toPng(el, { pixelRatio: 2, backgroundColor: "#ffffff", width, height });
+      // Second pass is the real capture
+      const dataUrl = await toPng(el, { pixelRatio: 2, backgroundColor: "#ffffff", width, height });
       return dataUrl;
     } finally {
+      // Restore all styles
+      el.style.maxWidth = prevStyle.maxWidth;
+      el.style.width = prevStyle.width;
+      el.style.overflow = prevStyle.overflow;
+      el.style.position = prevStyle.position;
+      tables.forEach((t, i) => (t.style.overflow = prevTableOverflow[i]));
       btns.forEach((b) => (b.style.visibility = ""));
     }
   }, []);
