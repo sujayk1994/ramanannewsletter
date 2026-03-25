@@ -14,7 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
 const CHART_COLORS = [
@@ -389,40 +389,39 @@ export default function ReportPage() {
   const captureImage = useCallback(async (): Promise<string | null> => {
     if (!reportRef.current) return null;
     const el = reportRef.current;
+    const width = el.scrollWidth;
+    const height = el.scrollHeight;
 
-    // Temporarily hide UI-only elements that shouldn't appear in the export
+    // Temporarily hide UI-only elements
     const deleteBtns = Array.from(el.querySelectorAll<HTMLElement>(".delete-btn"));
-    const dashedInputs = Array.from(el.querySelectorAll<HTMLInputElement>("input[type=text], textarea"));
-
+    const dashedInputs = Array.from(el.querySelectorAll<HTMLElement>("input[type=text], textarea"));
     deleteBtns.forEach((b) => { b.style.visibility = "hidden"; });
-    // Remove dashed edit borders from inputs for a clean export
     dashedInputs.forEach((inp) => {
-      inp.style.borderBottomStyle = "none";
-      inp.style.outline = "none";
+      (inp as HTMLElement).style.borderBottomStyle = "none";
+      (inp as HTMLElement).style.outline = "none";
     });
 
     try {
-      const canvas = await withPatchedOklch(() =>
-        html2canvas(el, {
-          scale: 2,
-          useCORS: true,
+      // Patch oklch→rgb in stylesheets so html-to-image can embed them correctly
+      const dataUrl = await withPatchedOklch(() =>
+        toPng(el, {
+          pixelRatio: 2,
           backgroundColor: "#ffffff",
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
-          width: el.scrollWidth,
-          height: el.scrollHeight,
-          windowWidth: el.scrollWidth,
-          windowHeight: el.scrollHeight,
+          width,
+          height,
+          style: { overflow: "visible" },
+          filter: (node) => {
+            if (node instanceof HTMLElement && node.classList?.contains("delete-btn")) return false;
+            return true;
+          },
         })
       );
-      return canvas.toDataURL("image/png");
+      return dataUrl;
     } finally {
-      // Restore everything
       deleteBtns.forEach((b) => { b.style.visibility = ""; });
       dashedInputs.forEach((inp) => {
-        inp.style.borderBottomStyle = "";
-        inp.style.outline = "";
+        (inp as HTMLElement).style.borderBottomStyle = "";
+        (inp as HTMLElement).style.outline = "";
       });
     }
   }, []);
