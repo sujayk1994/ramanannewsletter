@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import appLogo from "@assets/ramanan_1774446414560.png";
 import {
   PieChart,
   Pie,
@@ -279,23 +280,31 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      {/* Toolbar */}
-      <div className="max-w-[1200px] mx-auto mb-4 flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex gap-2">
-          <button onClick={addRow} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition">
+      {/* App Header / Toolbar */}
+      <div className="max-w-[1200px] mx-auto mb-4 bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-2 flex flex-wrap gap-2 items-center justify-between">
+        {/* Branding */}
+        <div className="flex items-center gap-3">
+          <img src={appLogo} alt="Ramanan" className="h-10 w-10 rounded-full object-cover shadow-sm" />
+          <div>
+            <p className="text-sm font-bold text-gray-800 leading-tight">Ramanan</p>
+            <p className="text-xs text-gray-500 leading-tight">Report Generator</p>
+          </div>
+          <div className="w-px h-8 bg-gray-200 mx-1" />
+          <button onClick={addRow} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition">
             + Add Month
           </button>
-          <button onClick={() => logoInputRef.current?.click()} className="px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded hover:bg-slate-700 transition">
-            Upload Logo
+          <button onClick={() => logoInputRef.current?.click()} className="px-3 py-1.5 bg-slate-500 text-white text-xs font-medium rounded hover:bg-slate-600 transition">
+            Upload Report Logo
           </button>
           <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
         </div>
+        {/* Export */}
         <div className="flex gap-2">
-          <button onClick={exportPNG} className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 transition">
-            Download PNG
+          <button onClick={exportPNG} className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded hover:bg-emerald-700 transition">
+            ↓ PNG
           </button>
-          <button onClick={exportPDF} className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 transition">
-            Download PDF
+          <button onClick={exportPDF} className="px-4 py-1.5 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition">
+            ↓ PDF
           </button>
         </div>
       </div>
