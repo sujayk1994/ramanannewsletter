@@ -40,6 +40,7 @@ interface Labels {
   colOptinSubscribers: string;
   colOpenRate: string;
   colClickRate: string;
+  colTotal: string;
   chartOpenRate: string;
   chartClickRate: string;
   chartOptinSubscribers: string;
@@ -68,6 +69,7 @@ const defaultLabels: Labels = {
   colOptinSubscribers: "Optin Subscribers",
   colOpenRate: "Open Rate",
   colClickRate: "Click Rate",
+  colTotal: "Total",
   chartOpenRate: "Open Rate",
   chartClickRate: "Click Rate",
   chartOptinSubscribers: "Optin Subscribers",
@@ -92,7 +94,7 @@ function renderCustomPieLabel({
   name: string;
   value: number;
 }) {
-  const radius = outerRadius + 30;
+  const radius = outerRadius + 34;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
   const formattedVal = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -103,16 +105,15 @@ function renderCustomPieLabel({
       fill="#1e293b"
       textAnchor={x > cx ? "start" : "end"}
       dominantBaseline="central"
-      fontSize={9}
+      fontSize={10}
       fontWeight={500}
     >
-      <tspan x={x} dy="-0.5em">{name}</tspan>
-      <tspan x={x} dy="1.2em">{formattedVal}</tspan>
+      <tspan x={x} dy="-0.55em">{name}</tspan>
+      <tspan x={x} dy="1.3em">{formattedVal}</tspan>
     </text>
   );
 }
 
-/** Inline editable heading — looks like styled text, acts as an input */
 function EditableHeading({
   value,
   onChange,
@@ -134,7 +135,6 @@ function EditableHeading({
   );
 }
 
-/** Inline editable cell input */
 function EditableCell({
   value,
   onChange,
@@ -192,6 +192,12 @@ function InfoRow({
   );
 }
 
+function sumCol(rows: MonthRow[], key: "optinSubscribers" | "openRate" | "clickRate"): string {
+  const total = rows.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0);
+  if (Number.isInteger(total)) return total.toLocaleString();
+  return total.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);
   const [rows, setRows] = useState<MonthRow[]>(defaultRows);
@@ -226,9 +232,8 @@ export default function ReportPage() {
     reader.readAsDataURL(file);
   };
 
-  const exportPNG = useCallback(async () => {
-    if (!reportRef.current) return;
-    // Temporarily hide delete buttons
+  const runExport = useCallback(async () => {
+    if (!reportRef.current) return null;
     const btns = reportRef.current.querySelectorAll<HTMLElement>(".delete-btn");
     btns.forEach((b) => (b.style.display = "none"));
     const canvas = await html2canvas(reportRef.current, {
@@ -237,22 +242,21 @@ export default function ReportPage() {
       backgroundColor: "#ffffff",
     });
     btns.forEach((b) => (b.style.display = ""));
+    return canvas;
+  }, []);
+
+  const exportPNG = useCallback(async () => {
+    const canvas = await runExport();
+    if (!canvas) return;
     const link = document.createElement("a");
     link.download = "newsletter-report.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
-  }, []);
+  }, [runExport]);
 
   const exportPDF = useCallback(async () => {
-    if (!reportRef.current) return;
-    const btns = reportRef.current.querySelectorAll<HTMLElement>(".delete-btn");
-    btns.forEach((b) => (b.style.display = "none"));
-    const canvas = await html2canvas(reportRef.current, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    });
-    btns.forEach((b) => (b.style.display = ""));
+    const canvas = await runExport();
+    if (!canvas) return;
     const imgData = canvas.toDataURL("image/png");
     const pdfW = canvas.width * 0.264583;
     const pdfH = canvas.height * 0.264583;
@@ -263,13 +267,15 @@ export default function ReportPage() {
     });
     pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
     pdf.save("newsletter-report.pdf");
-  }, []);
+  }, [runExport]);
 
   const pieOpenData = rows.map((r) => ({ name: r.month, value: parseFloat(r.openRate) || 0 }));
   const pieClickData = rows.map((r) => ({ name: r.month, value: parseFloat(r.clickRate) || 0 }));
   const barData = rows.map((r) => ({ name: r.month, value: parseFloat(r.optinSubscribers) || 0 }));
-  const chartHeight = Math.max(220, 180 + rows.length * 10);
-  const outerRadius = Math.min(75, 55 + rows.length * 2);
+
+  // Chart sizing — grows with more months
+  const chartHeight = Math.max(300, 260 + rows.length * 12);
+  const outerRadius = Math.min(95, 72 + rows.length * 3);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -305,7 +311,7 @@ export default function ReportPage() {
           <EditableHeading
             value={labels.reportTitle}
             onChange={(v) => updateLabel("reportTitle", v)}
-            className="text-xl font-bold tracking-widest uppercase text-white placeholder-white/50"
+            className="text-xl font-bold tracking-widest uppercase text-white"
           />
         </div>
 
@@ -348,34 +354,17 @@ export default function ReportPage() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-[#2563eb] text-white">
-                    {/* Editable column headers */}
                     <th className="py-2 px-3 text-left font-semibold border border-blue-400">
-                      <EditableHeading
-                        value={labels.colMonth}
-                        onChange={(v) => updateLabel("colMonth", v)}
-                        className="text-white text-sm font-semibold text-left"
-                      />
+                      <EditableHeading value={labels.colMonth} onChange={(v) => updateLabel("colMonth", v)} className="text-white text-sm font-semibold text-left" />
                     </th>
                     <th className="py-2 px-3 text-right font-semibold border border-blue-400">
-                      <EditableHeading
-                        value={labels.colOptinSubscribers}
-                        onChange={(v) => updateLabel("colOptinSubscribers", v)}
-                        className="text-white text-sm font-semibold text-right"
-                      />
+                      <EditableHeading value={labels.colOptinSubscribers} onChange={(v) => updateLabel("colOptinSubscribers", v)} className="text-white text-sm font-semibold text-right" />
                     </th>
                     <th className="py-2 px-3 text-right font-semibold border border-blue-400">
-                      <EditableHeading
-                        value={labels.colOpenRate}
-                        onChange={(v) => updateLabel("colOpenRate", v)}
-                        className="text-white text-sm font-semibold text-right"
-                      />
+                      <EditableHeading value={labels.colOpenRate} onChange={(v) => updateLabel("colOpenRate", v)} className="text-white text-sm font-semibold text-right" />
                     </th>
                     <th className="py-2 px-3 text-right font-semibold border border-blue-400">
-                      <EditableHeading
-                        value={labels.colClickRate}
-                        onChange={(v) => updateLabel("colClickRate", v)}
-                        className="text-white text-sm font-semibold text-right"
-                      />
+                      <EditableHeading value={labels.colClickRate} onChange={(v) => updateLabel("colClickRate", v)} className="text-white text-sm font-semibold text-right" />
                     </th>
                     <th className="py-2 px-3 border border-blue-400 w-8 delete-btn" />
                   </tr>
@@ -396,16 +385,33 @@ export default function ReportPage() {
                         <EditableCell value={row.clickRate} onChange={(v) => updateRow(row.id, "clickRate", v)} align="right" />
                       </td>
                       <td className="py-2 px-3 border border-blue-100 text-center delete-btn">
-                        <button
-                          onClick={() => removeRow(row.id)}
-                          className="text-red-500 hover:text-red-700 font-bold text-base leading-none"
-                          title="Remove month"
-                        >
+                        <button onClick={() => removeRow(row.id)} className="text-red-500 hover:text-red-700 font-bold text-base leading-none" title="Remove month">
                           ×
                         </button>
                       </td>
                     </tr>
                   ))}
+
+                  {/* Total row */}
+                  <tr className="bg-[#1e3a5f] text-white font-bold">
+                    <td className="py-2 px-3 border border-blue-900">
+                      <EditableHeading
+                        value={labels.colTotal}
+                        onChange={(v) => updateLabel("colTotal", v)}
+                        className="text-white text-sm font-bold text-left"
+                      />
+                    </td>
+                    <td className="py-2 px-3 border border-blue-900 text-right text-sm">
+                      {sumCol(rows, "optinSubscribers")}
+                    </td>
+                    <td className="py-2 px-3 border border-blue-900 text-right text-sm">
+                      {sumCol(rows, "openRate")}
+                    </td>
+                    <td className="py-2 px-3 border border-blue-900 text-right text-sm">
+                      {sumCol(rows, "clickRate")}
+                    </td>
+                    <td className="py-2 px-3 border border-blue-900 delete-btn" />
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -413,82 +419,90 @@ export default function ReportPage() {
         </div>
 
         {/* Charts section */}
-        <div className="border-t-2 border-[#1e3a5f] mt-2">
-          <div className="flex flex-wrap">
+        <div className="border-t-2 border-[#1e3a5f] mt-1">
+          <div className="grid grid-cols-3 divide-x divide-gray-200">
+
             {/* Open Rate Pie */}
-            <div className="flex-1 min-w-[300px] border-r border-gray-200 p-3">
+            <div className="p-4 flex flex-col">
               <EditableHeading
                 value={labels.chartOpenRate}
                 onChange={(v) => updateLabel("chartOpenRate", v)}
-                className="text-xs font-bold uppercase tracking-wider text-[#1e3a5f] mb-2 block"
+                className="text-xs font-bold uppercase tracking-wider text-[#1e3a5f] block mb-1"
               />
-              <ResponsiveContainer width="100%" height={chartHeight}>
-                <PieChart>
-                  <Pie
-                    data={pieOpenData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={outerRadius}
-                    dataKey="value"
-                    labelLine={true}
-                    label={renderCustomPieLabel}
-                  >
-                    {pieOpenData.map((_, index) => (
-                      <Cell key={`open-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex-1">
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+                    <Pie
+                      data={pieOpenData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={outerRadius}
+                      dataKey="value"
+                      labelLine={true}
+                      label={renderCustomPieLabel}
+                    >
+                      {pieOpenData.map((_, index) => (
+                        <Cell key={`open-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             {/* Click Rate Pie */}
-            <div className="flex-1 min-w-[300px] border-r border-gray-200 p-3">
+            <div className="p-4 flex flex-col">
               <EditableHeading
                 value={labels.chartClickRate}
                 onChange={(v) => updateLabel("chartClickRate", v)}
-                className="text-xs font-bold uppercase tracking-wider text-[#1e3a5f] mb-2 block"
+                className="text-xs font-bold uppercase tracking-wider text-[#1e3a5f] block mb-1"
               />
-              <ResponsiveContainer width="100%" height={chartHeight}>
-                <PieChart>
-                  <Pie
-                    data={pieClickData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={outerRadius}
-                    dataKey="value"
-                    labelLine={true}
-                    label={renderCustomPieLabel}
-                  >
-                    {pieClickData.map((_, index) => (
-                      <Cell key={`click-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex-1">
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+                    <Pie
+                      data={pieClickData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={outerRadius}
+                      dataKey="value"
+                      labelLine={true}
+                      label={renderCustomPieLabel}
+                    >
+                      {pieClickData.map((_, index) => (
+                        <Cell key={`click-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             {/* Optin Subscribers Bar */}
-            <div className="flex-1 min-w-[300px] p-3">
+            <div className="p-4 flex flex-col">
               <EditableHeading
                 value={labels.chartOptinSubscribers}
                 onChange={(v) => updateLabel("chartOptinSubscribers", v)}
-                className="text-xs font-bold uppercase tracking-wider text-[#1e3a5f] mb-1 block"
+                className="text-xs font-bold uppercase tracking-wider text-[#1e3a5f] block mb-0.5"
               />
               <EditableHeading
                 value={labels.bannerAdImpressions}
                 onChange={(v) => updateLabel("bannerAdImpressions", v)}
-                className="text-[10px] text-gray-500 mb-1 block normal-case tracking-normal"
+                className="text-[10px] text-gray-500 block normal-case tracking-normal mb-1"
               />
-              <ResponsiveContainer width="100%" height={chartHeight}>
-                <BarChart data={barData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
-                  <Tooltip formatter={(v: number) => v.toLocaleString()} />
-                  <Bar dataKey="value" fill={BAR_COLOR} radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="flex-1">
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart data={barData} margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
+                    <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                    <Bar dataKey="value" fill={BAR_COLOR} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
+
           </div>
         </div>
 
