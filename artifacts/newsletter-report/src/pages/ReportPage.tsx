@@ -15,8 +15,31 @@ import {
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
-const PIE_COLORS = ["#2563eb", "#1e40af", "#60a5fa", "#93c5fd", "#bfdbfe", "#1d4ed8", "#3b82f6"];
-const BAR_COLOR = "#2563eb";
+const PIE_COLORS = [
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#06b6d4", // cyan
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#14b8a6", // teal
+  "#f59e0b", // amber
+  "#6366f1", // indigo
+];
+
+const BAR_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
+  "#f59e0b",
+  "#6366f1",
+];
 
 interface MonthRow {
   id: string;
@@ -509,7 +532,11 @@ export default function ReportPage() {
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                     <Tooltip formatter={(v: number) => v.toLocaleString()} />
-                    <Bar dataKey="value" fill={BAR_COLOR} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                      {barData.map((_, index) => (
+                        <Cell key={`bar-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                      ))}
+                  </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
