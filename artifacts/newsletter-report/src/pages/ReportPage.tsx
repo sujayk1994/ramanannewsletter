@@ -602,9 +602,9 @@ export default function ReportPage() {
               )}
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm border-collapse">
+            {/* Table — fills remaining height; rows grow when months are few */}
+            <div className="overflow-x-auto flex-1" style={{ height: 0 }}>
+              <table className="w-full text-sm border-collapse" style={{ height: "100%" }}>
                 <thead>
                   <tr className="bg-[#2563eb] text-white">
                     <th className="py-2 px-3 text-left font-semibold border border-blue-400">
@@ -653,6 +653,16 @@ export default function ReportPage() {
                       </td>
                     </tr>
                   ))}
+
+                  {/* Spacer row — absorbs leftover height so no whitespace gap */}
+                  <tr style={{ height: "100%" }}>
+                    <td className="border-l border-r border-blue-100" />
+                    <td className="border-r border-blue-100" />
+                    <td className="border-r border-blue-100" />
+                    <td className="border-r border-blue-100" />
+                    {extraCols.map((col) => <td key={col.id} className="border-r border-blue-100" />)}
+                    <td className="delete-btn" />
+                  </tr>
 
                   {/* Total row */}
                   <tr className="bg-[#1e3a5f] text-white font-bold">
