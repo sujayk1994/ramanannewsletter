@@ -253,7 +253,46 @@ interface SidebarField {
   value: string;
   multiline: boolean;
 }
+const oklchCache = new Map<string, string>();
 
+function oklchToRgb(oklchStr: string): string {
+  if (oklchCache.has(oklchStr)) return oklchCache.get(oklchStr)!;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = oklchStr;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    const rgb = a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
+    oklchCache.set(oklchStr, rgb);
+    return rgb;
+  } catch {
+    return oklchStr;
+  }
+}
+
+async function withPatchedOklch<T>(fn: () => Promise<T>): Promise<T> {
+  const styleEls = Array.from(document.querySelectorAll<HTMLStyleElement>("style"));
+  const originals: Array<{ el: HTMLStyleElement; text: string }> = [];
+
+  for (const style of styleEls) {
+    const original = style.textContent || "";
+    if (!original.includes("oklch")) continue;
+    originals.push({ el: style, text: original });
+    const patched = original.replace(/oklch\([^)]+\)/g, oklchToRgb);
+    style.textContent = patched;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const { el, text } of originals) {
+      el.textContent = text;
+    }
+  }
+}
 
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);
@@ -363,18 +402,20 @@ export default function ReportPage() {
     });
 
     try {
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-      });
+      const canvas = await withPatchedOklch(() =>
+        html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          width: el.scrollWidth,
+          height: el.scrollHeight,
+          windowWidth: el.scrollWidth,
+          windowHeight: el.scrollHeight,
+        })
+      );
       return canvas.toDataURL("image/png");
     } finally {
       // Restore everything
