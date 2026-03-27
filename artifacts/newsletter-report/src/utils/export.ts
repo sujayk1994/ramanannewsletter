@@ -86,6 +86,10 @@ export async function exportReportAsImage(
     removeSelectors = [],
   } = options;
 
+  // Measure the full scrollable size BEFORE patching stylesheets
+  const width = liveElement.scrollWidth;
+  const height = liveElement.scrollHeight;
+
   const backups = patchStylesheets();
 
   try {
@@ -93,6 +97,9 @@ export async function exportReportAsImage(
       pixelRatio,
       backgroundColor,
       skipFonts: true,
+      // Capture the full report width, not just the visible viewport portion
+      width,
+      height,
       // Exclude UI-only nodes without touching the DOM
       filter(node) {
         if (node instanceof Element && removeSelectors.length) {
