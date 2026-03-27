@@ -288,6 +288,9 @@ export async function exportReportAsImage(
   // foreignObject.  Swap oklch tokens for rgb tokens now; restore after.
   const styleBackups = patchStylesheets();
 
+  // Allow the clone to paint before capture
+  await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())));
+
   try {
     // ── 7. Capture ────────────────────────────────────────────────────────────
     const dataUrl = await toPng(clone, {
@@ -295,6 +298,7 @@ export async function exportReportAsImage(
       backgroundColor,
       width,
       height,
+      skipFonts: true,
     });
     return dataUrl;
   } finally {
