@@ -1,0 +1,184 @@
+March 27, 2026 at 3:21 PM
+failed
+1fb8f40
+Add Dockerfile and run script for deployment Create Dockerfile for multi-stage build and a run.sh script to install dependencies, build the application, and serve it. Replit-Commit-Author: Agent Replit-Commit-Session-Id: ec5ebf5d-2e93-4471-93a3-03cfcb305c82 Replit-Commit-Checkpoint-Type: full_checkpoint Replit-Commit-Event-Id: b33748f7-8a98-4c2b-8172-aa7fdfbcb8ac Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/ab338520-403e-400a-a121-c617127d0e17/ec5ebf5d-2e93-4471-93a3-03cfcb305c82/KFAX3hs Replit-Helium-Checkpoint-Created: true
+
+Rollback
+Exited with status 1 while building your code.
+Read our docs for common ways to troubleshoot your deploy.
+
+All logs
+Search
+Search
+
+Mar 27, 3:20 PM - 3:22 PM
+GMT+5:30
+
+
+
+==> It looks like we don't have access to your repo, but we'll try to clone it anyway.
+==> Cloning from https://github.com/sujayk1994/ramanannewsletter
+==> Checking out commit 1fb8f408e5280ea56fb049f1af10c243e9de3c26 in branch master
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 727B done
+#1 DONE 0.0s
+#2 [internal] load metadata for docker.io/library/node:20-alpine
+#2 ...
+#3 [auth] library/node:pull render-prod/docker-mirror-repository/library/node:pull token for us-west1-docker.pkg.dev
+#3 DONE 0.0s
+#2 [internal] load metadata for docker.io/library/node:20-alpine
+#2 DONE 0.6s
+#4 [internal] load .dockerignore
+#4 transferring context: 186B done
+#4 DONE 0.0s
+#5 [builder  1/10] FROM docker.io/library/node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+#5 resolve docker.io/library/node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c done
+#5 ...
+#6 [internal] load build context
+#6 transferring context: 76.84MB 0.6s done
+#6 DONE 0.7s
+#5 [builder  1/10] FROM docker.io/library/node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+#5 extracting sha256:589002ba0eaed121a1dbf42f6648f29e5be55d5c8a6ee0f8eaa0285cc21ac153 0.1s done
+#5 DONE 1.1s
+#5 [builder  1/10] FROM docker.io/library/node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+#5 extracting sha256:d7f6aca05b78f475975eeac3898b7ef0a618937174c469650e05e81cbf8c5f46
+#5 extracting sha256:d7f6aca05b78f475975eeac3898b7ef0a618937174c469650e05e81cbf8c5f46 1.7s done
+#5 DONE 2.8s
+#5 [builder  1/10] FROM docker.io/library/node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+#5 extracting sha256:62e0e1181d88da8ed0e2fda221e9446ad0f09a004a375193ad7a38e31ec4eab4 0.0s done
+#5 extracting sha256:c7734204880fafbd6297ce1844e07c137d82ee814ac8b5fa6ac1a3659101d503 0.0s done
+#5 DONE 2.9s
+#7 [runner 2/4] RUN npm install -g serve
+#7 ...
+#8 [builder  2/10] RUN corepack enable && corepack prepare pnpm@latest --activate
+#8 0.466 Preparing pnpm@latest for immediate activation...
+#8 DONE 1.6s
+#9 [builder  3/10] WORKDIR /app
+#9 DONE 0.0s
+#10 [builder  4/10] COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+#10 DONE 0.0s
+#11 [builder  5/10] COPY tsconfig.base.json tsconfig.json ./
+#11 DONE 0.0s
+#12 [builder  6/10] COPY lib/ ./lib/
+#12 DONE 0.0s
+#7 [runner 2/4] RUN npm install -g serve
+#7 ...
+#13 [builder  7/10] COPY artifacts/newsletter-report/ ./artifacts/newsletter-report/
+#13 DONE 0.1s
+#14 [builder  8/10] COPY attached_assets/ ./attached_assets/
+#14 DONE 0.2s
+#7 [runner 2/4] RUN npm install -g serve
+#7 2.613 
+#7 2.613 added 85 packages in 2s
+#7 2.613 
+#7 2.613 26 packages are looking for funding
+#7 2.613   run `npm fund` for details
+#7 2.615 npm notice
+#7 2.615 npm notice New major version of npm available! 10.8.2 -> 11.12.1
+#7 2.615 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+#7 2.615 npm notice To update run: npm install -g npm@11.12.1
+#7 2.615 npm notice
+#7 DONE 2.7s
+#15 [builder  9/10] RUN pnpm install --frozen-lockfile
+#15 ...
+#16 [runner 3/4] WORKDIR /app
+#16 DONE 0.0s
+#15 [builder  9/10] RUN pnpm install --frozen-lockfile
+#15 0.768 Scope: all 6 workspace projects
+#15 0.909 Lockfile is up to date, resolution step is skipped
+#15 1.007 Progress: resolved 1, reused 0, downloaded 0, added 0
+#15 1.691 Packages: +398
+#15 1.691 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#15 2.292 Progress: resolved 398, reused 0, downloaded 0, added 0
+#15 3.299 Progress: resolved 398, reused 0, downloaded 80, added 12
+#15 4.391 Progress: resolved 398, reused 0, downloaded 179, added 39
+#15 5.508 Progress: resolved 398, reused 0, downloaded 235, added 52
+#15 6.696 Progress: resolved 398, reused 0, downloaded 276, added 59
+#15 7.794 Progress: resolved 398, reused 0, downloaded 311, added 65
+#15 8.801 Progress: resolved 398, reused 0, downloaded 382, added 75
+#15 9.802 Progress: resolved 398, reused 0, downloaded 393, added 270
+#15 10.80 Progress: resolved 398, reused 0, downloaded 393, added 391
+#15 11.50 Progress: resolved 398, reused 0, downloaded 398, added 398, done
+#15 11.73 .../esbuild@0.27.3/node_modules/esbuild postinstall$ node install.js
+#15 11.81 .../esbuild@0.27.3/node_modules/esbuild postinstall: Done
+#15 11.94 
+#15 11.94 devDependencies:
+#15 11.94 + prettier 3.8.1
+#15 11.94 + typescript 5.9.3
+#15 11.94 
+#15 11.95 . preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+#15 11.98 . preinstall: Done
+#15 12.03 ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+#15 12.03 │                                                                              │
+#15 12.03 │   Ignored build scripts: core-js@3.49.0.                                     │
+#15 12.03 │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+#15 12.03 │   to run scripts.                                                            │
+#15 12.03 │                                                                              │
+#15 12.03 ╰──────────────────────────────────────────────────────────────────────────────╯
+#15 12.16 Done in 11.9s using pnpm v10.33.0
+#15 DONE 15.3s
+#17 [builder 10/10] RUN pnpm --filter @workspace/newsletter-report build
+#17 1.081 
+#17 1.081 > @workspace/newsletter-report@0.0.0 build /app/artifacts/newsletter-report
+#17 1.081 > vite build --config vite.config.ts
+#17 1.081 
+#17 1.225 /app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js:115
+#17 1.225 		throw new Error(
+#17 1.225 		      ^
+#17 1.225 
+#17 1.225 Error: Cannot find module @rollup/rollup-linux-x64-musl. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.
+#17 1.225     at requireWithFriendlyError (/app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js:115:9)
+#17 1.225     at Object.<anonymous> (/app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js:124:76)
+#17 1.225     ... 3 lines matching cause stack trace ...
+#17 1.225     at Module._load (node:internal/modules/cjs/loader:1091:12)
+#17 1.225     at cjsLoader (node:internal/modules/esm/translators:298:15)
+#17 1.225     at ModuleWrap.<anonymous> (node:internal/modules/esm/translators:240:7)
+#17 1.225     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+#17 1.225     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24) {
+#17 1.225   [cause]: Error: Cannot find module '@rollup/rollup-linux-x64-musl'
+#17 1.225   Require stack:
+#17 1.225   - /app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js
+#17 1.225       at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+#17 1.225       at Module._load (node:internal/modules/cjs/loader:1038:27)
+#17 1.225       at Module.require (node:internal/modules/cjs/loader:1289:19)
+#17 1.225       at require (node:internal/modules/helpers:182:18)
+#17 1.225       at requireWithFriendlyError (/app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js:97:10)
+#17 1.225       at Object.<anonymous> (/app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js:124:76)
+#17 1.225       at Module._compile (node:internal/modules/cjs/loader:1521:14)
+#17 1.225       at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+#17 1.225       at Module.load (node:internal/modules/cjs/loader:1266:32)
+#17 1.225       at Module._load (node:internal/modules/cjs/loader:1091:12) {
+#17 1.225     code: 'MODULE_NOT_FOUND',
+#17 1.225     requireStack: [
+#17 1.225       '/app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js'
+#17 1.225     ]
+#17 1.225   }
+#17 1.225 }
+#17 1.225 
+#17 1.225 Node.js v20.20.2
+#17 1.273 /app/artifacts/newsletter-report:
+#17 1.273  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/newsletter-report@0.0.0 build: `vite build --config vite.config.ts`
+#17 1.273 Exit status 1
+#17 ERROR: process "/bin/sh -c pnpm --filter @workspace/newsletter-report build" did not complete successfully: exit code: 1
+------
+ > [builder 10/10] RUN pnpm --filter @workspace/newsletter-report build:
+1.225     requireStack: [
+1.225       '/app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/native.js'
+1.225     ]
+1.225   }
+1.225 }
+1.225 
+1.225 Node.js v20.20.2
+1.273 /app/artifacts/newsletter-report:
+1.273  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/newsletter-report@0.0.0 build: `vite build --config vite.config.ts`
+1.273 Exit status 1
+------
+Dockerfile:20
+--------------------
+  18 |     ENV NODE_ENV=production
+  19 |     
+  20 | >>> RUN pnpm --filter @workspace/newsletter-report build
+  21 |     
+  22 |     FROM node:20-alpine AS runner
+--------------------
+error: failed to solve: process "/bin/sh -c pnpm --filter @workspace/newsletter-report build" did not complete successfully: exit code: 1
