@@ -253,9 +253,6 @@ interface SidebarField {
   value: string;
   multiline: boolean;
 }
-// ---------------------------------------------------------------------------
-// Export color-conversion utility
-// ---------------------------------------------------------------------------
 
 export default function ReportPage() {
   const [info, setInfo] = useState<ReportInfo>(defaultInfo);
@@ -351,89 +348,11 @@ export default function ReportPage() {
 
   const captureImage = useCallback(async (): Promise<string | null> => {
     if (!reportRef.current) return null;
-    const el = reportRef.current;
-    const width = el.scrollWidth;
-    const height = el.scrollHeight;
-
-    // Place a full-width clone off-screen so layout isn't constrained by the viewport
-    const clone = el.cloneNode(true) as HTMLElement;
-    clone.style.position = "fixed";
-    clone.style.top = "-99999px";
-    clone.style.left = "0px";
-    clone.style.width = width + "px";
-    clone.style.maxWidth = "none";
-    clone.style.overflow = "visible";
-    clone.style.zIndex = "-1";
-
-    // Replace <input> with a plain <span> carrying the live value
-    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>("input[type=text]"));
-    clone.querySelectorAll<HTMLInputElement>("input[type=text]").forEach((inp, i) => {
-      const span = document.createElement("span");
-      span.textContent = liveInputs[i]?.value ?? inp.value;
-      span.className = inp.className;
-      span.style.border = "none";
-      span.style.outline = "none";
-      span.style.display = "inline-block";
-      inp.replaceWith(span);
+    return exportReportAsImage(reportRef.current, {
+      pixelRatio: 2,
+      backgroundColor: "#ffffff",
+      removeSelectors: [".delete-btn"],
     });
-
-    // Replace <textarea> with a plain <div>
-    const liveTAs = Array.from(el.querySelectorAll<HTMLTextAreaElement>("textarea"));
-    clone.querySelectorAll<HTMLTextAreaElement>("textarea").forEach((ta, i) => {
-      const div = document.createElement("div");
-      div.textContent = liveTAs[i]?.value ?? ta.value;
-      div.className = ta.className;
-      div.style.border = "none";
-      div.style.outline = "none";
-      ta.replaceWith(div);
-    });
-
-    // Remove delete/action buttons
-    clone.querySelectorAll<HTMLElement>(".delete-btn").forEach((b) => b.remove());
-
-    // SVG pie labels overflow their bounding box
-    clone.querySelectorAll<SVGElement>("svg").forEach((s) => (s.style.overflow = "visible"));
-
-    // Table scroll wrappers must not clip
-    clone.querySelectorAll<HTMLElement>(".overflow-x-auto").forEach((t) => (t.style.overflow = "visible"));
-
-    // Walk the live tree + clone in parallel: read computed colors from the
-    // live element, convert oklch() → rgb() via canvas pixel sampling, and
-    // apply the rgb values as inline styles on the clone.
-    // This runs BEFORE the clone is in the DOM, so it never causes a flicker.
-    walkAndConvertColors(el, clone);
-
-    document.body.appendChild(clone);
-
-    // html-to-image also embeds the raw <style> tags in the SVG foreignObject.
-    // Patch oklch tokens in those tags for the duration of the toPng call,
-    // then restore them immediately after so the live UI is never mutated.
-    const styleEls = Array.from(
-      document.querySelectorAll<HTMLStyleElement>("style")
-    );
-    const styleBackups: Array<{ el: HTMLStyleElement; original: string }> = [];
-    for (const styleEl of styleEls) {
-      const original = styleEl.textContent ?? "";
-      if (!original.includes("oklch")) continue;
-      styleBackups.push({ el: styleEl, original });
-      styleEl.textContent = original.replace(/oklch\([^)]+\)/g, oklchToRgb);
-    }
-
-    try {
-      const dataUrl = await toPng(clone, {
-        pixelRatio: 2,
-        backgroundColor: "#ffffff",
-        width,
-        height,
-      });
-      return dataUrl;
-    } finally {
-      // Restore stylesheets and remove clone — always runs, even on error
-      for (const { el, original } of styleBackups) {
-        el.textContent = original;
-      }
-      document.body.removeChild(clone);
-    }
   }, []);
 
   const exportPNG = useCallback(async () => {
