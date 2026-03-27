@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/dist
+**/.git
+.local
+.agents
+.cache
+.upm
+push.sh
+push-to-github.sh
+artifacts/api-server
+artifacts/mockup-sandbox
