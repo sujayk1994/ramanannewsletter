@@ -3,18 +3,18 @@
  *
  * Exports a DOM element as a PNG data URL using html-to-image.
  *
- * Tailwind v4 uses oklch() for all color values. html-to-image embeds raw
- * <style> tags verbatim into its SVG foreignObject, which makes the browser's
- * SVG renderer reject those rules and produce blank output.
+ * Key problems solved:
+ *  1. Tailwind v4 uses oklch() colors → SVG renderer rejects them → blank output.
+ *     Fix: patch every <style> tag to convert oklch() to rgb() before capture,
+ *     restore in a finally block.
  *
- * Fix:
- *  1. Before calling toPng, scan every <style> tag and replace oklch() tokens
- *     with rgb() equivalents (sampled via a 1×1 canvas so the browser's own
- *     color engine does the conversion). Restore the originals in a finally.
- *  2. Call toPng on the LIVE element (not an off-screen clone) so the browser
- *     has already painted it and the capture is non-blank.
- *  3. Use the filter callback to strip UI-only nodes (delete buttons etc.).
- *  4. skipFonts: true avoids cross-origin failures with Google Fonts.
+ *  2. Overflow / clipped containers (overflow-x:auto, height:0 flex trick)
+ *     clip the captured content to the visible viewport area.
+ *     Fix: temporarily set overflow:visible and height:auto on every element
+ *     whose computed overflow or inline height would clip content.
+ *
+ *  3. Cross-origin font failures (Google Fonts) produce blank SVG output.
+ *     Fix: skipFonts:true.
  */
 
 import { toPng } from "html-to-image";
@@ -45,10 +45,10 @@ function oklchToRgb(oklchStr: string): string {
 
 // ── stylesheet patch ─────────────────────────────────────────────────────────
 
-type Backup = { el: HTMLStyleElement; original: string };
+type StyleBackup = { el: HTMLStyleElement; original: string };
 
-function patchStylesheets(): Backup[] {
-  const backups: Backup[] = [];
+function patchStylesheets(): StyleBackup[] {
+  const backups: StyleBackup[] = [];
   document.querySelectorAll<HTMLStyleElement>("style").forEach((el) => {
     const original = el.textContent ?? "";
     if (!original.includes("oklch")) return;
@@ -58,8 +58,78 @@ function patchStylesheets(): Backup[] {
   return backups;
 }
 
-function restoreStylesheets(backups: Backup[]): void {
+function restoreStylesheets(backups: StyleBackup[]): void {
   backups.forEach(({ el, original }) => (el.textContent = original));
+}
+
+// ── overflow / height flattening ─────────────────────────────────────────────
+
+type OverflowBackup = {
+  el: HTMLElement;
+  overflowX: string;
+  overflowY: string;
+  overflow: string;
+  height: string;
+  maxHeight: string;
+};
+
+/**
+ * Walk every element inside `root` and flatten any overflow clipping or
+ * height:0 tricks so the full content is visible to html-to-image.
+ * Returns the backup list needed to restore the original styles.
+ */
+function flattenOverflow(root: HTMLElement): OverflowBackup[] {
+  const backups: OverflowBackup[] = [];
+  const all = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+
+  for (const el of all) {
+    const cs = getComputedStyle(el);
+    const ovX = cs.overflowX;
+    const ovY = cs.overflowY;
+    const ov = cs.overflow;
+    const needsOverflow =
+      ovX === "auto" || ovX === "hidden" || ovX === "scroll" ||
+      ovY === "auto" || ovY === "hidden" || ovY === "scroll";
+
+    // height:0 inline style (used for the flex grow trick on the table div)
+    const inlineH = el.style.height;
+    const needsHeight = inlineH === "0" || inlineH === "0px";
+
+    // max-height that could clip content
+    const inlineMH = el.style.maxHeight;
+    const cssMH = cs.maxHeight;
+    const needsMaxHeight = inlineMH !== "" || (cssMH !== "none" && cssMH !== "" && parseInt(cssMH) < 9999);
+
+    if (!needsOverflow && !needsHeight) continue;
+
+    backups.push({
+      el,
+      overflowX: el.style.overflowX,
+      overflowY: el.style.overflowY,
+      overflow: el.style.overflow,
+      height: el.style.height,
+      maxHeight: el.style.maxHeight,
+    });
+
+    if (needsOverflow) {
+      el.style.overflow = "visible";
+    }
+    if (needsHeight) {
+      el.style.height = "auto";
+    }
+  }
+
+  return backups;
+}
+
+function restoreOverflow(backups: OverflowBackup[]): void {
+  for (const { el, overflowX, overflowY, overflow, height, maxHeight } of backups) {
+    el.style.overflowX = overflowX;
+    el.style.overflowY = overflowY;
+    el.style.overflow = overflow;
+    el.style.height = height;
+    el.style.maxHeight = maxHeight;
+  }
 }
 
 // ── public API ───────────────────────────────────────────────────────────────
@@ -67,15 +137,9 @@ function restoreStylesheets(backups: Backup[]): void {
 export interface ExportOptions {
   pixelRatio?: number;
   backgroundColor?: string;
-  /** CSS selectors for nodes that should be excluded from the export. */
   removeSelectors?: string[];
 }
 
-/**
- * Capture `liveElement` (already rendered in the page) as a PNG data URL.
- * The element is captured in-place — no off-screen clone — so the browser
- * has already painted it and the result is never blank.
- */
 export async function exportReportAsImage(
   liveElement: HTMLElement,
   options: ExportOptions = {}
@@ -86,21 +150,25 @@ export async function exportReportAsImage(
     removeSelectors = [],
   } = options;
 
-  // Measure the full scrollable size BEFORE patching stylesheets
+  // Flatten overflow clipping so the full content is visible to html-to-image
+  const overflowBackups = flattenOverflow(liveElement);
+
+  // Wait one frame for the browser to reflow after overflow changes
+  await new Promise<void>((res) => requestAnimationFrame(() => res()));
+
+  // Now measure full dimensions after reflow
   const width = liveElement.scrollWidth;
   const height = liveElement.scrollHeight;
 
-  const backups = patchStylesheets();
+  const styleBackups = patchStylesheets();
 
   try {
     return await toPng(liveElement, {
       pixelRatio,
       backgroundColor,
       skipFonts: true,
-      // Capture the full report width, not just the visible viewport portion
       width,
       height,
-      // Exclude UI-only nodes without touching the DOM
       filter(node) {
         if (node instanceof Element && removeSelectors.length) {
           for (const sel of removeSelectors) {
@@ -111,6 +179,7 @@ export async function exportReportAsImage(
       },
     });
   } finally {
-    restoreStylesheets(backups);
+    restoreStylesheets(styleBackups);
+    restoreOverflow(overflowBackups);
   }
 }
