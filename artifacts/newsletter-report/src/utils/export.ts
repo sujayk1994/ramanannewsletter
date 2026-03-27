@@ -3,17 +3,19 @@
  *
  * Exports a DOM element as a PNG data URL using html-to-image.
  *
- * Key problems solved:
- *  1. Tailwind v4 uses oklch() colors → SVG renderer rejects them → blank output.
- *     Fix: patch every <style> tag to convert oklch() to rgb() before capture,
- *     restore in a finally block.
+ * Problems solved:
+ *  1. oklch() colors in Tailwind v4 → SVG renderer rejects → blank output.
+ *     Fix: patch <style> tags (oklch → rgb via canvas pixel sampling).
  *
- *  2. Overflow / clipped containers (overflow-x:auto, height:0 flex trick)
- *     clip the captured content to the visible viewport area.
- *     Fix: temporarily set overflow:visible and height:auto on every element
- *     whose computed overflow or inline height would clip content.
+ *  2. Chrome clips SVG foreignObject rendering to the current viewport width.
+ *     A 1200px report inside an 800px preview pane gets truncated.
+ *     Fix: temporarily set document.documentElement.style.minWidth to the
+ *     full report width so Chrome "thinks" the viewport is wide enough.
  *
- *  3. Cross-origin font failures (Google Fonts) produce blank SVG output.
+ *  3. overflow-x:auto / height:0 containers clip content before capture.
+ *     Fix: flatten them to overflow:visible / height:auto temporarily.
+ *
+ *  4. Cross-origin font failures → blank SVG.
  *     Fix: skipFonts:true.
  */
 
@@ -32,18 +34,16 @@ function oklchToRgb(oklchStr: string): string {
     ctx.fillStyle = oklchStr;
     ctx.fillRect(0, 0, 1, 1);
     const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    const rgb =
+    const result =
       a === 255
         ? `rgb(${r},${g},${b})`
         : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
-    _cache.set(oklchStr, rgb);
-    return rgb;
+    _cache.set(oklchStr, result);
+    return result;
   } catch {
     return oklchStr;
   }
 }
-
-// ── stylesheet patch ─────────────────────────────────────────────────────────
 
 type StyleBackup = { el: HTMLStyleElement; original: string };
 
@@ -62,74 +62,32 @@ function restoreStylesheets(backups: StyleBackup[]): void {
   backups.forEach(({ el, original }) => (el.textContent = original));
 }
 
-// ── overflow / height flattening ─────────────────────────────────────────────
+// ── overflow flattening ───────────────────────────────────────────────────────
 
-type OverflowBackup = {
-  el: HTMLElement;
-  overflowX: string;
-  overflowY: string;
-  overflow: string;
-  height: string;
-  maxHeight: string;
-};
+type OverflowBackup = { el: HTMLElement; overflow: string; height: string };
 
-/**
- * Walk every element inside `root` and flatten any overflow clipping or
- * height:0 tricks so the full content is visible to html-to-image.
- * Returns the backup list needed to restore the original styles.
- */
 function flattenOverflow(root: HTMLElement): OverflowBackup[] {
   const backups: OverflowBackup[] = [];
-  const all = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
-
-  for (const el of all) {
+  [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))].forEach((el) => {
     const cs = getComputedStyle(el);
-    const ovX = cs.overflowX;
-    const ovY = cs.overflowY;
-    const ov = cs.overflow;
-    const needsOverflow =
-      ovX === "auto" || ovX === "hidden" || ovX === "scroll" ||
-      ovY === "auto" || ovY === "hidden" || ovY === "scroll";
-
-    // height:0 inline style (used for the flex grow trick on the table div)
-    const inlineH = el.style.height;
-    const needsHeight = inlineH === "0" || inlineH === "0px";
-
-    // max-height that could clip content
-    const inlineMH = el.style.maxHeight;
-    const cssMH = cs.maxHeight;
-    const needsMaxHeight = inlineMH !== "" || (cssMH !== "none" && cssMH !== "" && parseInt(cssMH) < 9999);
-
-    if (!needsOverflow && !needsHeight) continue;
-
-    backups.push({
-      el,
-      overflowX: el.style.overflowX,
-      overflowY: el.style.overflowY,
-      overflow: el.style.overflow,
-      height: el.style.height,
-      maxHeight: el.style.maxHeight,
-    });
-
-    if (needsOverflow) {
-      el.style.overflow = "visible";
-    }
-    if (needsHeight) {
-      el.style.height = "auto";
-    }
-  }
-
+    const needsOv =
+      cs.overflowX === "auto" || cs.overflowX === "hidden" ||
+      cs.overflowX === "scroll" || cs.overflowY === "auto" ||
+      cs.overflowY === "hidden" || cs.overflowY === "scroll";
+    const needsH = el.style.height === "0" || el.style.height === "0px";
+    if (!needsOv && !needsH) return;
+    backups.push({ el, overflow: el.style.overflow, height: el.style.height });
+    if (needsOv) el.style.overflow = "visible";
+    if (needsH) el.style.height = "auto";
+  });
   return backups;
 }
 
 function restoreOverflow(backups: OverflowBackup[]): void {
-  for (const { el, overflowX, overflowY, overflow, height, maxHeight } of backups) {
-    el.style.overflowX = overflowX;
-    el.style.overflowY = overflowY;
+  backups.forEach(({ el, overflow, height }) => {
     el.style.overflow = overflow;
     el.style.height = height;
-    el.style.maxHeight = maxHeight;
-  }
+  });
 }
 
 // ── public API ───────────────────────────────────────────────────────────────
@@ -150,15 +108,22 @@ export async function exportReportAsImage(
     removeSelectors = [],
   } = options;
 
-  // Flatten overflow clipping so the full content is visible to html-to-image
+  // 1. Flatten overflow/height clipping inside the report
   const overflowBackups = flattenOverflow(liveElement);
 
-  // Wait one frame for the browser to reflow after overflow changes
+  // 2. Expand the HTML root so Chrome's SVG foreignObject viewport matches
+  //    the report width (Chrome clips foreignObject to the viewport width)
   await new Promise<void>((res) => requestAnimationFrame(() => res()));
-
-  // Now measure full dimensions after reflow
   const width = liveElement.scrollWidth;
   const height = liveElement.scrollHeight;
+
+  const prevDocMinWidth = document.documentElement.style.minWidth;
+  const prevDocWidth = document.documentElement.style.width;
+  document.documentElement.style.minWidth = `${width}px`;
+  document.documentElement.style.width = `${width}px`;
+
+  // Give the browser one more frame to acknowledge the new viewport width
+  await new Promise<void>((res) => requestAnimationFrame(() => res()));
 
   const styleBackups = patchStylesheets();
 
@@ -181,5 +146,7 @@ export async function exportReportAsImage(
   } finally {
     restoreStylesheets(styleBackups);
     restoreOverflow(overflowBackups);
+    document.documentElement.style.minWidth = prevDocMinWidth;
+    document.documentElement.style.width = prevDocWidth;
   }
 }
